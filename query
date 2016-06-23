@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+
+# Author  : Michael Simpson
+# Date    : 06/03/16
+
+# parse command line options
+while [[ $# > 1 ]];do
+  key="$1"
+
+  case $key in
+    -s|--select)
+      SELECT="$2"
+    shift # past argument
+    ;;
+    -o|--order)
+      ORDER="$2"
+    shift # past argument
+    ;;
+    -f|--filter)
+      FILTER="$2"
+    shift # past argument
+    ;;
+    *)
+      echo Unknown option \("$key"\) # unknown option
+    ;;
+  esac
+  shift # past argument or value
+done
+
+mkdir -p ./results
+# maps field names to column values
+declare -A fields=( ["STB"]=1 ["TITLE"]=2 ["PROVIDER"]=3
+                    ["DATE"]=4 ["REV"]=5 ["VIEW_TIME"]=6 )
+
+# query command pipeline that gets built up in stages
+pipeline="grep --no-filename -r \""
+
+# filter routine, leverages 'grep' command
+if [ -z "$FILTER" ]
+then
+  # if no filter is specified, retrieve all data
+  pipeline+=".*\" "
+else
+  IFS="=" read -r which to_match <<< "$FILTER"
+  # construct regex to filter matched data rows
+  pipeline+=^
+  for i in `seq 6`;do
+    if [ "$i" -eq "${fields[$which]}" ]
+    then
+      pipeline+="$to_match|"
+    else
+      pipeline+=".*|"
+    fi
+  done
+  # remove extraneous pipe
+  pipeline=${pipeline%?}
+  pipeline+="$\" " 
+fi
+pipeline+=./data/
+export IFS=","
+
+# sorting routine, leverages 'sort' command
+if [ -n "$ORDER" ]
+then
+  pipeline+=" | sort -t\"|\" "
+  # constructing column key arguments
+  for col in $ORDER; do
+    pipeline+="-k${fields[$col]},${fields[$col]} "
+  done
+  # remove extraneous space
+  pipeline=${pipeline%?}
+fi
+
+# selection routine, leverages 'cut' command
+if [ -n "$SELECT" ]
+then
+  pipeline+=" | cut -d\"|\" -f"
+  # mapping the columns to extract
+  for col in $SELECT; do
+    pipeline+="${fields[$col]}," 
+  done
+  # remove extraneous comma
+  pipeline=${pipeline%?}
+fi
+
+# redirect results into unix timestamped log
+pipeline+=" > ./results/$(date +%s)"
+# execute the query command pipeline
+bash -c "$pipeline"

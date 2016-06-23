@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+# Author  : Michael Simpson
+# Date    : 06/03/16
+
+DATA=./data/
+mkdir -p "$DATA"
+
+# looping through input file, single line per iteration
+while IFS='' read -r line || [[ -n "$line" ]]; do
+  # parse the line into variables
+  IFS='|' read -r stb title provider date rev view_time <<< "$line"
+
+  # file system is partitioned into directories by date
+  dir="$DATA$date/"
+  mkdir -p "$dir"
+
+  # data is further filtered into files by their set top box id
+  tgt="$dir$stb"
+  # regex to detect collisions
+  uniqueId="^$stb\|$ttl\|.*\|$date\|.*\|.*$"
+
+  # if the target file exists and a collision is detected
+  if [ -f "$tgt" ] && grep -q "$uniqueId" "$tgt";
+  then
+    # in place replacement of the affected line
+    perl -pi -e "s/$uniqueId/$line/" "$tgt"
+  else
+    # append line to file
+    echo "$line" >> "$tgt"
+  fi
+done < "$1"
